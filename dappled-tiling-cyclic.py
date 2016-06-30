@@ -2,11 +2,11 @@
 #
 # Cyclically Dappled tiling
 # by S. Kaji
-# 17/Jun/2016
+# 30/Jun/2016
 # 
 # A python implementation of the algorithm discussed in the paper
 # "Dappled tiling"
-# By S. Kaji and .....
+# By S. Kaji et al
 # This program also produces cyclically dappled tilings.
 #
 
@@ -14,21 +14,28 @@ import numpy as np
 import random
 
 # size of the grid
-M = 12
-N = 10
+M = 8
+N = 7
 
 # conditions: H[i] is the limit of the length of the horizontal strip with tile i
-H = [2,M+1]
-V = [N+1, 2]
+# set >2 for cyclic version
+H = [3,M]
+V = [N, 2]
+
+# set true for the cyclic version
+CYCLIC = True
+
+# set true to print debug information
+DEBUG = False
 
 # (quick dirty) global variables
 # for book-keeping the number of consecutive tiles
 HDanger = np.ones((M), dtype=np.int)
 VDanger = np.ones((M), dtype=np.int)
-
+prevHDanger = np.ones((M), dtype=np.int)
+prevVDanger = np.ones((M), dtype=np.int)
 
 # choose a tile different from t
-# TODO: extend it for |T|>2
 def chooseTile(t):
     return 1-t
 
@@ -53,159 +60,197 @@ def diagtiling(n,m):
             f[i,j] = 0
     return f
 
+# erroneous examples
+def erroneoustiling():
+    global N,M
+    N=5
+    M=5
 
-#
-def compute_danger(f,i,j):
-    if f[i,j]==f[i-1,j]:
-        VDanger[j] = VDanger[j]+1
+    # f=np.array([[0, 1, 0, 1, 0],
+    #    [1, 0, 1, 0, 1],
+    #    [1, 1, 0, 0, 1],
+    #    [0, 1, 1, 0, 0],
+    #    [1, 0, 0, 1, 1]])
+
+    f=np.array([[0, 1, 0, 1, 1],
+            [1, 0, 0, 1, 0],
+            [1, 1, 0, 0, 0],
+            [0, 0, 1, 0, 1],
+            [1, 0, 1, 0, 0]])
+
+    return f
+
+
+# compute the number of consecutive cells in the up and to the left directions at (i,j)
+def compute_danger(f,i,j,n2,m2):
+    global VDanger, HDanger
+    addH = addV = 0
+    if i != 0 and f[i,j]==f[i-1,j]:
+        VDanger[j] = prevVDanger[j]+1
     else:
         VDanger[j] = 1
-    if f[i,j]==f[i,j-1]:
-        HDanger[j] = HDanger[j-1]+1
+    if CYCLIC:
+        if i==n2-1:
+            k=1
+            while(f[i,j]==f[(i+k) % N,j]):
+                addV = addV+1
+                k=k+1
+        l = 2 if V[f[i,j]]>2 else 1
+        if i==V[f[i,j]]-l:
+            addV = addV+l
+
+    if j != 0 and f[i,j]==f[i,j-1]:
+        HDanger[j] = prevHDanger[j-1]+1
     else:
         HDanger[j] = 1
+    if CYCLIC:
+        if j==m2-1:
+            k=1
+            while(f[i,j]==f[i,(j+k) % M]):
+                addH = addH+1
+                k=k+1
+        l = 2 if H[f[i,j]]>2 else 1
+        if j==H[f[i,j]]-l:
+            addH = addH+l
+    return (addH,addV)
 
-## interior
-def rectifyInterior(f,n,m):
-    for w in range(1,n+m-1):
-        for i in range(max(1,w-m+1),min(w,n)):
-            j = w-i
-            prev_vd=VDanger[j]
-            compute_danger(f,i,j)
-            if V[f[i,j]] < VDanger[j] or H[f[i,j]] < HDanger[j]:
-                f[i,j]=chooseTile(f[i,j])
-                VDanger[j]=prev_vd
-                compute_danger(f,i,j)
-                if V[f[i,j]] < VDanger[j]:
-                    if f[i-1,j] == f[i,j-1]:
-                        f[i,j] = chooseTile(f[i-1,j])
-                        VDanger[j]=HDanger[j]=1
-                    else:
-                        f[i,j]=f[i-1,j-1]
-                        f[i-1,j]=f[i,j-1]=chooseTile(f[i,j])
-                        HDanger[j]=VDanger[j]=VDanger[j-1]=1
-                        if j < M-1:
-                            if f[i-1,j]==f[i-1,j+1]:
-                                HDanger[j+1]=2
-                elif H[f[i,j]] < HDanger[j]:
-                    if f[i-1,j] == f[i,j-1]:
-                        f[i,j] = chooseTile(f[i,j-1])
-                        VDanger[j]=HDanger[j]=1
-                    else:
-                        f[i,j]=f[i-1,j-1]
-                        f[i-1,j]=f[i,j-1]=chooseTile(f[i,j])
-                        VDanger[j]=HDanger[j]=VDanger[j-1]=1
-                        if j < M-1:
-                            if f[i-1,j]==f[i-1,j+1]:
-                                HDanger[j+1]=2
 
-    
-    
-# boundary
-def rectifyBoundary(f):
-    danger = 1
-    for i in range(1,N):
-        if f[i,0] == f[i-1,0]:
-            danger = danger + 1
-            if V[f[i,0]] < danger:
-                f[i,0]=chooseTile(f[i,0])
-                danger = 1
-    danger = 1
-    for j in range(1,M):
-        if f[0,j] == f[0,j-1]:
-            danger = danger + 1
-            if H[f[0,j]] < danger:
-                f[0,j]=chooseTile(f[0,j])
-                danger = 1
-    
+# fix invalidness of the cell (i,j)
+def fix_at(f,i,j,n2,m2):
+    (addH,addV)=compute_danger(f,i,j,n2,m2)
+    if V[f[i,j]] < VDanger[j]+addV or H[f[i,j]] < HDanger[j]+addH:
+        if DEBUG:
+            print(prevHDanger,HDanger,addH,addV)
+        f[i,j]=chooseTile(f[i,j])
+        (addH,addV)=compute_danger(f,i,j,n2,m2)
+        if V[f[i,j]] < VDanger[j]+addV or H[f[i,j]] < HDanger[j]+addH:
+                f[i,j]=f[i-1,j-1]
+                f[i-1,j]=f[i,j-1]=chooseTile(f[i,j])
+                VDanger[j]=HDanger[j]=prevVDanger[j-1]=prevHDanger[j]=1
+                if i > 0 and j < M-1:
+                    HDanger[j + 1] = 2 if f[i-1,j]==f[i-1,j+1] else 1
+                if j > 0 and i < N-1:
+                    VDanger[j - 1] = 2 if f[i,j-1]==f[i+1,j-1] else 1
+        if DEBUG:
+            print(i,j)
+            printtiling(f)
+
+
+# rectify invalid cells in the region (n1,m1)-(n2-1,m2-1)
+def rectify(f,n1,m1,n2,m2):
+    global prevHDanger,prevVDanger
+    for w in range(n1+m1,n2+m2-1):
+        for i in range(max(n1,w-m2+1),min(w+1+m1,n2)):
+            fix_at(f,i,w-i,n2,m2)
+        if CYCLIC:
+            if w >= m2-1:
+                fix_at(f,w-m2+1,m2-1,n2,m2)
+            if w >= n2-1:
+                fix_at(f,n2-1,w-n2+1,n2,m2)
+        prevHDanger = HDanger.copy()
+        prevVDanger = VDanger.copy()
+
+
+# turn an input to a dappled one
+def dappled(f):
+    g=f.copy()
+    if CYCLIC:
+#        bezel(g)
+#        rectify(g,1,1,N-1,M-1)
+        rectify(g,0,0,N,M)
+    else:
+        rectify(g,0,0,N,M)
+    return g
+
 # Bezel trick on the boundary
 def bezel(f):
     f[N-1,M-1]=f[0,0]
     f[N-1,0]=f[0,M-1]=chooseTile(f[0,0])
-    for i in range(int(N/2)):
+    if M % 2 == 0:
+        f[0,M-2] = f[0,0]
+        f[N-1,M-2] = chooseTile(f[0,0])
+    if N % 2 == 0:
+        f[N-2,0] = f[0,0]
+        f[N-2,M-1] = chooseTile(f[0,0])
+    for i in range(int((N-1)/2)):
         f[2*i+1,0] = chooseTile(f[2*i,0])
         f[2*i+1,M-1] = f[2*i,0]
-    for j in range(int(M/2)):
+        f[2*i,M-1] = chooseTile(f[2*i,0])
+    for j in range(int((M-1)/2)):
         f[0,2*j+1] = chooseTile(f[0,2*j])
         f[N-1,2*j+1] = f[0,2*j]
-    for i in range(1,int(N/2)):
-        f[2*i,M-1] = chooseTile(f[2*i,0])
-    for j in range(1,int(M/2)):
         f[N-1,2*j] = chooseTile(f[0,2*j])
 
-#
-def compute_danger_terminal(f,i,j):
-    hd=1
-    for k in range(1,min(H[f[i,j]],j)+1):
-        if f[i,j-k]==f[i,j]:
-            hd=hd+1
-        else:
-            break
-    if f[i,j]==f[i,j+1]:
-        hd=hd+1
-    vd=1
-    for k in range(1,min(V[f[i,j]],i)+1):
-        if f[i-k,j]==f[i,j]:
-            vd=vd+1
-        else:
-            break
-    if f[i,j]==f[i+1,j]:
-        vd=vd+1
-    return (hd,vd)
-# 
-def rectifyTerminal(f):
-    for i in range(1,N-2):
-        j=M-2
-        (hd,vd)=compute_danger_terminal(f,i,j)
-        if V[f[i,j]] < vd or H[f[i,j]] < hd:
-            f[i,j]=chooseTile(f[i,j])
-            (hd,vd)=compute_danger_terminal(f,i,j)
-            if V[f[i,j]] < vd:
-                f[i,j]=f[i-1,j-1]
-                f[i-1,j]=f[i,j-1]=chooseTile(f[i,j])
-            elif H[f[i,j]] < hd:
-                f[i,j]=f[i-1,j-1]
-                f[i-1,j]=f[i,j-1]=chooseTile(f[i,j])        
-    for j in range(1,M-1):
-        i=N-2
-        (hd,vd)=compute_danger_terminal(f,i,j)
-        if V[f[i,j]] < vd or H[f[i,j]] < hd:
-            f[i,j]=chooseTile(f[i,j])
-            (hd,vd)=compute_danger_terminal(f,i,j)
-            if V[f[i,j]] < vd:
-                f[i,j]=f[i-1,j-1]
-                f[i-1,j]=f[i,j-1]=chooseTile(f[i,j])
-            elif H[f[i,j]] < hd:
-                f[i,j]=f[i-1,j-1]
-                f[i-1,j]=f[i,j-1]=chooseTile(f[i,j])        
+# check if f is valid at (i,j)
+def violate(f, i, j):
+    vl = True
+    if CYCLIC or j>=H[f[i,j]]:
+        if H[f[i,j]] < M:
+            for k in range(1,H[f[i,j]]+1):
+                if f[i,(j-k) % M] != f[i,j]:
+                    vl = False
+                    break
+            if vl:
+                return True
+        
 
-    return f
+    if CYCLIC or i>=V[f[i,j]]:
+        if V[f[i,j]] < N:
+            for k in range(1,V[f[i,j]]+1):
+                if f[(i-k) % N,j] != f[i,j]:
+                    vl = False
+                    break
+            if vl:
+                return True
+    return False
+
+# return the list of invalid cells
+def is_dappled(f):
+    return [(i,j) for i in range(0,N) for j in range(0,M) if violate(f,i,j)]
+
+# test the program with many randomly-generated samples
+def measure_miss(samples):
+    for s in range(samples):
+        f = randtiling(N,M)
+        g = dappled(f)
+        errors = is_dappled(g)
+        if len(errors)>0:
+            print("Errors at ",errors)
+            print("initial tiling")
+            print(N,f)
+            print("output")
+            print(g)
+            return False
+    return True
 
 
 # print tiling patterns
 def printtiling(f):
     print(f) 
 
+
+## start here
 if __name__ == "__main__":
-    print((M,N))
-#    f = randtiling(N,M)
-    f = diagtiling(N,M)
+    print("Size of the board",(M,N))
+    print("Maximal number of horizontally consecutive tiles", H)
+    print("Maximal number of vertically consecutive tiles", V)
+
+#    if not DEBUG:
+#        print(measure_miss(10000))
+
+    f = randtiling(N,M)
+#    f = diagtiling(N,M)
 #    f = onetiling(N,M)
+
     print("Initial tiling")
     printtiling(f)
 
-    g=f.copy()        
-    print("Dappled tiling")
-    rectifyBoundary(f)
-    rectifyInterior(f,N,M)
-    printtiling(f)
+    if CYCLIC:
+        print("Cyclically dappled tiling")
+    else:
+        print("Dappled tiling")
 
-    print("Cyclically dappled tiling")
-    bezel(g)
-    rectifyInterior(g,N-1,M-1)
-    rectifyTerminal(g)
+    g=dappled(f)
     printtiling(g)
+    print(is_dappled(g))
 
-    exit
-
-            
