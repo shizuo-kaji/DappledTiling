@@ -7,8 +7,8 @@ An algorithm to produce dappled tilings
  */
 
 This is a python implementation of the algorithm discussed in the paper
-"Dappled tiling" (in preparation)
+"Dappled tiling" by S. Kaji et al (in preparation).
 
 There are two versions: 
-- dappled-tiling.py is a simpler and cleaner implementation of the main algorithm
+- dappled-tiling.py is a simpler implementation of the main algorithm
 - dappled-tiling-cyclic.py produces cyclically dappled tillings as well

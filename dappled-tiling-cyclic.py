@@ -14,16 +14,18 @@ import numpy as np
 import random
 
 # size of the grid
-M = 8
-N = 7
+M = 7
+N = 10
 
 # conditions: H[i] is the limit of the length of the horizontal strip with tile i
 # set >2 for cyclic version
-H = [3,M]
-V = [N, 2]
+H = [2,M]
+V = [N,2]
 
 # set true for the cyclic version
 CYCLIC = True
+# set true for bezel version; necessary when min(p)=min(q)=2
+BEZEL = True
 
 # set true to print debug information
 DEBUG = False
@@ -96,7 +98,7 @@ def compute_danger(f,i,j,n2,m2):
                 addV = addV+1
                 k=k+1
         l = 2 if V[f[i,j]]>2 else 1
-        if i==V[f[i,j]]-l:
+        if not BEZEL and i==V[f[i,j]]-l:
             addV = addV+l
 
     if j != 0 and f[i,j]==f[i,j-1]:
@@ -110,7 +112,7 @@ def compute_danger(f,i,j,n2,m2):
                 addH = addH+1
                 k=k+1
         l = 2 if H[f[i,j]]>2 else 1
-        if j==H[f[i,j]]-l:
+        if not BEZEL and j==H[f[i,j]]-l:
             addH = addH+l
     return (addH,addV)
 
@@ -140,24 +142,25 @@ def fix_at(f,i,j,n2,m2):
 def rectify(f,n1,m1,n2,m2):
     global prevHDanger,prevVDanger
     for w in range(n1+m1,n2+m2-1):
-        for i in range(max(n1,w-m2+1),min(w+1+m1,n2)):
+        for i in range(max(n1,w-m2+1),min(w+1-m1,n2)):
             fix_at(f,i,w-i,n2,m2)
-        if CYCLIC:
-            if w >= m2-1:
-                fix_at(f,w-m2+1,m2-1,n2,m2)
-            if w >= n2-1:
-                fix_at(f,n2-1,w-n2+1,n2,m2)
+        if w >= m2-1:
+            fix_at(f,w-m2+1,m2-1,n2,m2)
         prevHDanger = HDanger.copy()
         prevVDanger = VDanger.copy()
 
 
 # turn an input to a dappled one
 def dappled(f):
+    global HDanger,VDanger,prevHDanger,prevVDanger
+    HDanger = np.ones((M), dtype=np.int)
+    VDanger = np.ones((M), dtype=np.int)
+    prevHDanger = np.ones((M), dtype=np.int)
+    prevVDanger = np.ones((M), dtype=np.int)
     g=f.copy()
-    if CYCLIC:
-#        bezel(g)
-#        rectify(g,1,1,N-1,M-1)
-        rectify(g,0,0,N,M)
+    if BEZEL:
+        bezel(g)
+        rectify(g,1,1,N-1,M-1)
     else:
         rectify(g,0,0,N,M)
     return g
@@ -166,12 +169,15 @@ def dappled(f):
 def bezel(f):
     f[N-1,M-1]=f[0,0]
     f[N-1,0]=f[0,M-1]=chooseTile(f[0,0])
+    f[0,M-3]=f[N-3,0]
     if M % 2 == 0:
-        f[0,M-2] = f[0,0]
+        f[0, M-2] = f[0,0]
         f[N-1,M-2] = chooseTile(f[0,0])
+        f[0,M-4] = chooseTile(f[0,M-3])
     if N % 2 == 0:
         f[N-2,0] = f[0,0]
         f[N-2,M-1] = chooseTile(f[0,0])
+        f[N-4,0] = chooseTile(f[N-3,0])
     for i in range(int((N-1)/2)):
         f[2*i+1,0] = chooseTile(f[2*i,0])
         f[2*i+1,M-1] = f[2*i,0]
