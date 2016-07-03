@@ -17,8 +17,8 @@ M = 12
 N = 10
 
 # conditions: H[i] is the limit of the length of the horizontal strip with tile i
-H = [2,M+1]
-V = [N+1, 2]
+H = [2,5]
+V = [5,2]
 
 # (quick dirty) global variables
 # for book-keeping the number of consecutive tiles
@@ -103,8 +103,8 @@ def dappled(f):
 ## main 
 if __name__ == "__main__":
     print((M,N))
-#    f = randtiling(N,M)
-    f = diagtiling(N,M)
+    f = randtiling(N,M)
+#    f = diagtiling(N,M)
 #    f = onetiling(N,M)
     print("Initial tiling")
     printtiling(f)

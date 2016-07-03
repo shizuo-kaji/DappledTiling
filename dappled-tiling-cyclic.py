@@ -2,7 +2,7 @@
 #
 # Cyclically Dappled tiling
 # by S. Kaji
-# 30/Jun/2016
+# 3/Jul/2016
 # 
 # A python implementation of the algorithm discussed in the paper
 # "Dappled tiling"
@@ -14,17 +14,17 @@ import numpy as np
 import random
 
 # size of the grid
-M = 7
+M = 12
 N = 10
 
 # conditions: H[i] is the limit of the length of the horizontal strip with tile i
 # set >2 for cyclic version
-H = [2,M]
-V = [N,2]
+H = [3,5]
+V = [5,3]
 
 # set true for the cyclic version
 CYCLIC = True
-# set true for bezel version; necessary when min(p)=min(q)=2
+# set true for bezel version; necessary when p=q=2
 BEZEL = True
 
 # set true to print debug information
@@ -62,29 +62,8 @@ def diagtiling(n,m):
             f[i,j] = 0
     return f
 
-# erroneous examples
-def erroneoustiling():
-    global N,M
-    N=5
-    M=5
-
-    # f=np.array([[0, 1, 0, 1, 0],
-    #    [1, 0, 1, 0, 1],
-    #    [1, 1, 0, 0, 1],
-    #    [0, 1, 1, 0, 0],
-    #    [1, 0, 0, 1, 1]])
-
-    f=np.array([[0, 1, 0, 1, 1],
-            [1, 0, 0, 1, 0],
-            [1, 1, 0, 0, 0],
-            [0, 0, 1, 0, 1],
-            [1, 0, 1, 0, 0]])
-
-    return f
-
-
 # compute the number of consecutive cells in the up and to the left directions at (i,j)
-def compute_danger(f,i,j,n2,m2):
+def compute_danger(f,i,j):
     global VDanger, HDanger
     addH = addV = 0
     if i != 0 and f[i,j]==f[i-1,j]:
@@ -92,13 +71,13 @@ def compute_danger(f,i,j,n2,m2):
     else:
         VDanger[j] = 1
     if CYCLIC:
-        if i==n2-1:
+        if i==N-1:
             k=1
             while(f[i,j]==f[(i+k) % N,j]):
                 addV = addV+1
                 k=k+1
         l = 2 if V[f[i,j]]>2 else 1
-        if not BEZEL and i==V[f[i,j]]-l:
+        if i==V[f[i,j]]-l:
             addV = addV+l
 
     if j != 0 and f[i,j]==f[i,j-1]:
@@ -106,25 +85,25 @@ def compute_danger(f,i,j,n2,m2):
     else:
         HDanger[j] = 1
     if CYCLIC:
-        if j==m2-1:
+        if j==M-1:
             k=1
             while(f[i,j]==f[i,(j+k) % M]):
                 addH = addH+1
                 k=k+1
         l = 2 if H[f[i,j]]>2 else 1
-        if not BEZEL and j==H[f[i,j]]-l:
+        if j==H[f[i,j]]-l:
             addH = addH+l
     return (addH,addV)
 
 
 # fix invalidness of the cell (i,j)
-def fix_at(f,i,j,n2,m2):
-    (addH,addV)=compute_danger(f,i,j,n2,m2)
+def fix_at(f,i,j):
+    (addH,addV)=compute_danger(f,i,j)
     if V[f[i,j]] < VDanger[j]+addV or H[f[i,j]] < HDanger[j]+addH:
         if DEBUG:
-            print(prevHDanger,HDanger,addH,addV)
+            print((prevHDanger[j-1],HDanger[j]),(prevVDanger[j],VDanger[j]),(addH,addV))
         f[i,j]=chooseTile(f[i,j])
-        (addH,addV)=compute_danger(f,i,j,n2,m2)
+        (addH,addV)=compute_danger(f,i,j)
         if V[f[i,j]] < VDanger[j]+addV or H[f[i,j]] < HDanger[j]+addH:
                 f[i,j]=f[i-1,j-1]
                 f[i-1,j]=f[i,j-1]=chooseTile(f[i,j])
@@ -134,18 +113,16 @@ def fix_at(f,i,j,n2,m2):
                 if j > 0 and i < N-1:
                     VDanger[j - 1] = 2 if f[i,j-1]==f[i+1,j-1] else 1
         if DEBUG:
-            print(i,j)
+            print("fixed at:",(i,j))
             printtiling(f)
 
 
 # rectify invalid cells in the region (n1,m1)-(n2-1,m2-1)
-def rectify(f,n1,m1,n2,m2):
+def rectify(f,n1,m1):
     global prevHDanger,prevVDanger
-    for w in range(n1+m1,n2+m2-1):
-        for i in range(max(n1,w-m2+1),min(w+1-m1,n2)):
-            fix_at(f,i,w-i,n2,m2)
-        if w >= m2-1:
-            fix_at(f,w-m2+1,m2-1,n2,m2)
+    for w in range(n1+m1,N+M-1):
+        for i in range(max(n1,w-M+1),min(w+1-m1,N)):
+            fix_at(f,i,w-i)
         prevHDanger = HDanger.copy()
         prevVDanger = VDanger.copy()
 
@@ -160,32 +137,31 @@ def dappled(f):
     g=f.copy()
     if BEZEL:
         bezel(g)
-        rectify(g,1,1,N-1,M-1)
+        rectify(g,2,2)
     else:
-        rectify(g,0,0,N,M)
+        rectify(g,0,0)
     return g
 
 # Bezel trick on the boundary
 def bezel(f):
-    f[N-1,M-1]=f[0,0]
-    f[N-1,0]=f[0,M-1]=chooseTile(f[0,0])
+    f[N-2,0]=f[0,M-2]
     f[0,M-3]=f[N-3,0]
-    if M % 2 == 0:
-        f[0, M-2] = f[0,0]
-        f[N-1,M-2] = chooseTile(f[0,0])
-        f[0,M-4] = chooseTile(f[0,M-3])
-    if N % 2 == 0:
-        f[N-2,0] = f[0,0]
-        f[N-2,M-1] = chooseTile(f[0,0])
-        f[N-4,0] = chooseTile(f[N-3,0])
-    for i in range(int((N-1)/2)):
+    if M % 2 == 1:
+        f[0,M-1] = chooseTile(f[0,0])
+        f[1,M-1] = f[0,0]
+        f[0,M-3] = chooseTile(f[0,M-2])
+    if N % 2 == 1:
+        f[N-1,0] = chooseTile(f[0,0])
+        f[N-1,1] = f[0,0]
+        f[N-3,0] = chooseTile(f[N-2,0])
+    for i in range(int(N/2)):
+        f[2*i,1] = chooseTile(f[2*i,0])
         f[2*i+1,0] = chooseTile(f[2*i,0])
-        f[2*i+1,M-1] = f[2*i,0]
-        f[2*i,M-1] = chooseTile(f[2*i,0])
-    for j in range(int((M-1)/2)):
+        f[2*i+1,1] = f[2*i,0]
+    for j in range(int(M/2)):
         f[0,2*j+1] = chooseTile(f[0,2*j])
-        f[N-1,2*j+1] = f[0,2*j]
-        f[N-1,2*j] = chooseTile(f[0,2*j])
+        f[1,2*j] = chooseTile(f[0,2*j])
+        f[1,2*j+1] = f[0,2*j]
 
 # check if f is valid at (i,j)
 def violate(f, i, j):
@@ -198,8 +174,7 @@ def violate(f, i, j):
                     break
             if vl:
                 return True
-        
-
+    vl = True
     if CYCLIC or i>=V[f[i,j]]:
         if V[f[i,j]] < N:
             for k in range(1,V[f[i,j]]+1):
@@ -224,10 +199,13 @@ def measure_miss(samples):
             print("Errors at ",errors)
             print("initial tiling")
             print(N,f)
+            print("bezelled")
+            bezel(f)
+            print(f)
             print("output")
             print(g)
             return False
-    return True
+    print("Random test passed!")
 
 
 # print tiling patterns
@@ -250,13 +228,13 @@ if __name__ == "__main__":
 
     print("Initial tiling")
     printtiling(f)
+    g=dappled(f)
 
     if CYCLIC:
         print("Cyclically dappled tiling")
     else:
         print("Dappled tiling")
 
-    g=dappled(f)
     printtiling(g)
     print(is_dappled(g))
 
